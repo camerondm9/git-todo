@@ -65,7 +65,7 @@ def main():
     branch_args = [a for a in sys.argv[1:] if not a.startswith("-")]
     diff_args = [a for a in sys.argv[1:] if a.startswith("-")]
     if len(branch_args) == 0:
-        branch_args.append("develop")
+        branch_args.append("develop")  # TODO: Not everyone uses the same branch name. This should be detected if possible, or maybe we need a config file?  .git-todo or .gittodo or something?
     if len(branch_args) == 1:
         diff_args.insert(0, "--merge-base")
 
@@ -74,7 +74,7 @@ def main():
         [
             "git",
             "diff",
-            "--unified=5",
+            "--unified=5",  # TODO: If we add a config file, the number of context lines should probably be configurable.
             "--diff-algorithm=histogram",
             "--no-color",
             "--no-prefix",
@@ -106,7 +106,7 @@ def main():
 
     # Search for TODOs in files
     TODO = re.compile(
-        r"^\+[^\n]*((?:#|//|/\*)[ \t]*TODO[: \t][ \t]*[^\n]+)$",
+        r"^\+[^\n]*((?:#|//|/\*)[ \t]*TODO[: \t][ \t]*[^\n]+)$",  # TODO: Find TODO anywhere in comment, not just at the beginning. We may want to trim text that appears before the TODO though... How to display that cleanly? Maybe use comment char and ellipsis:   # ... TODO: figure this out
         re.MULTILINE | re.IGNORECASE,
     )
     COMMENT = re.compile(
@@ -151,5 +151,5 @@ def main():
 
 
 if __name__ == "__main__":
-    if not install_alias():
+    if not install_alias():  # TODO: Adding a version number (and --version command) might be a good idea. Maybe an update mechanism too, if we're comfortable pointing at GitHub?
         main()
