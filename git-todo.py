@@ -158,7 +158,6 @@ def main():
             *branch_args,
         ],
         encoding="utf-8",
-        universal_newlines=True,
     )
 
     # Slice diff into files
@@ -206,7 +205,7 @@ def main():
                     # Print TODOs and aligned comments that directly follow them (until end of context lines)
                     if m := TODO.search(line):
                         if count == 0:
-                            print(f"at {file_name}:{new_line}")
+                            print(f"{file_name}:{new_line}")
                         print(f"    {m[1]}")
                         count = 1
                         indent = m.start(1)
