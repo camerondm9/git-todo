@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
+from pathlib import Path
 import re
 import subprocess
 import sys
+
+
+COMMON_BRANCHES = [
+    "develop",
+    "main",
+    "master",
+]
+DEFAULT_CONTEXT_LINES = 5
 
 
 def install_alias():
@@ -52,12 +61,73 @@ def install_alias():
             return True
 
 
-def main():
-    # Test if we're in a git repo, to avoid `git diff` spamming the console
-    try:
+def guess_main_branch():
+    # Try to detect common branch names
+    branches = subprocess.check_output(
+        [
+            "git",
+            "branch",
+            "--list",
+            "--format=%(refname:lstrip=2)",
+            "--",
+            *COMMON_BRANCHES,
+        ],
+        encoding="utf-8",
+    ).splitlines()
+    # Prefer branches according to order defined above, not the (sorted) order git returns them in
+    for b in COMMON_BRANCHES:
+        if b and b in branches:
+            print(f"Guessed main branch: {b}", file=sys.stderr)
+            return b
+    raise ValueError(
+        "Unable to guess main branch! Specify as command line argument, or create config file .git-todo"
+    )
+
+
+def find_repo_root():
+    # Find root of git repo
+    return Path(
         subprocess.check_output(
-            ["git", "rev-parse", "--is-inside-work-tree"], encoding="utf-8"
-        )
+            [
+                "git",
+                "rev-parse",
+                "--show-toplevel",
+            ],
+            encoding="utf-8",
+        ).removesuffix("\n")
+    )
+
+
+def get_config():
+    config = DEFAULTS.copy()
+    for entry in subprocess.check_output(
+        [
+            "git",
+            "config",
+            "--null",
+            "--get-regexp",
+            r"^todo\.",
+        ],
+        encoding="utf-8",
+    ).split("\0"):
+        if entry:
+            key, _sep, value = entry.partition("\n")
+            key = key.removeprefix("todo.")
+            config[key] = value  # TODO: Do we have any need for multi-valued keys?
+    return config
+
+
+def main():
+    try:
+        git_repo_root = find_repo_root()
+    except subprocess.CalledProcessError as e:
+        # `git rev-parse` fails with a short error message to stderr if not inside a repo.
+        # Much better than `git diff`, which spams it's full help text.
+        exit(e.returncode)
+
+    # Ask git for all config entries in the [todo] section
+    try:
+        config = get_config()
     except subprocess.CalledProcessError as e:
         exit(e.returncode)
 
@@ -65,16 +135,21 @@ def main():
     branch_args = [a for a in sys.argv[1:] if not a.startswith("-")]
     diff_args = [a for a in sys.argv[1:] if a.startswith("-")]
     if len(branch_args) == 0:
-        branch_args.append("develop")  # TODO: Not everyone uses the same branch name. This should be detected if possible, or maybe we need a config file?  .git-todo or .gittodo or something?
+        branch = config.get("default-branch") or guess_main_branch()
+        branch_args.append(branch)
     if len(branch_args) == 1:
         diff_args.insert(0, "--merge-base")
 
     # Generate a diff to know which lines have been touched
+    try:
+        context_lines = int(config.get("context-lines") or "")
+    except ValueError:
+        context_lines = DEFAULT_CONTEXT_LINES
     diff = subprocess.check_output(
         [
             "git",
             "diff",
-            "--unified=5",  # TODO: If we add a config file, the number of context lines should probably be configurable.
+            f"--unified={context_lines}",
             "--diff-algorithm=histogram",
             "--no-color",
             "--no-prefix",
